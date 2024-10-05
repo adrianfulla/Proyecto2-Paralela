@@ -71,7 +71,7 @@ void brute_force_des(const uint8_t *ciphertext, const uint8_t *correct_plaintext
             double time_taken = get_time_diff(start_time, end_time);
             printf("Key found: %llx\n", (unsigned long long)i);
             print_key(key, DES_KEY_SIZE);  // Print the found key
-            rintf("Decrypted: ");
+            printf("Decrypted: ");
             for (int i = 0; i < DES_KEY_SIZE; i++) {
                 printf("%02x ", decrypted[i]);
             }
@@ -87,21 +87,18 @@ void brute_force_des(const uint8_t *ciphertext, const uint8_t *correct_plaintext
 }
 
 int main() {
-    // Sample plaintext
     const uint8_t plaintext[DES_KEY_SIZE] = {0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x57, 0x72, 0x6C};  // Example: "HelloWrl"
     uint8_t ciphertext[DES_KEY_SIZE];
     DES_cblock iv = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};  // IV initialization
     uint8_t generated_key[DES_KEY_SIZE];
     
-    // For different key sizes, generate a key, encrypt the plaintext, and then brute-force to find the key
-    for (int key_bits = 8; key_bits <= 56; key_bits += 8) {  // Testing with 56-bit keys
+    for (int key_bits = 8; key_bits <= 56; key_bits += 8) { 
         printf("Trying key length %d\n", key_bits);
 
-        // Generate random key of size key_bits
-        memset(generated_key, 0, DES_KEY_SIZE);
-        uint64_t random_key = rand() % (1ULL << key_bits);  // Generate random key within key_bits size
-        memcpy(generated_key, &random_key, key_bits / 8);  // Copy the random key into the key buffer
-        print_key(generated_key, DES_KEY_SIZE);  // Print the generated key
+        memset(generated_key, 0, DES_KEY_SIZE); 
+        uint64_t max_key = (1ULL << key_bits) - 1;
+        memcpy(generated_key, &max_key, key_bits / 8);
+        print_key(generated_key, DES_KEY_SIZE); 
 
         // Encrypt the plaintext using the generated key
         encrypt_with_key(plaintext, ciphertext, (DES_cblock *)generated_key, &iv);
