@@ -86,6 +86,8 @@ void brute_force_des(const uint8_t *ciphertext, const uint8_t *correct_plaintext
     printf("Key not found (key size: %d bits) in %f seconds.\n", key_bits, time_taken);
 }
 
+
+
 int main() {
     const uint8_t plaintext[DES_KEY_SIZE] = {0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x57, 0x72, 0x6C};  // Example: "HelloWrl"
     uint8_t ciphertext[DES_KEY_SIZE];
