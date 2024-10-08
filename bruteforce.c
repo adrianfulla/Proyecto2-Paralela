@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
     const char keyword[] = "HelloWrl";
 
     DES_cblock iv = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};  // IV initialization
-    DES_cblock generated_key = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x00};  // The key you specified
+    DES_cblock generated_key = {0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};  // The key you specified
 
     if (id == 0) {
         // Process 0 will perform the encryption
@@ -112,66 +112,60 @@ int main(int argc, char *argv[]) {
     MPI_Bcast(ciphertext, DES_KEY_SIZE, MPI_UNSIGNED_CHAR, 0, comm);
     MPI_Bcast(&keyword, DES_KEY_SIZE, MPI_UNSIGNED_CHAR, 0, comm);
 
-    if (id == 0) {
-        printf("Process %d (coordinator) is done with encryption and broadcasting.\n", id);
-        start_time = MPI_Wtime();
-        // Process 0 also needs to receive the found key from any other process
-        MPI_Irecv(&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &req);
-        MPI_Wait(&req, &st);
+    unsigned long long range_per_node = upper / N;  // Divide the key space by all N workers
+    mylower = range_per_node * id;  // Start range for this process
+    myupper = (id == N - 1) ? upper : range_per_node * (id + 1) - 1;  // Last process gets the remaining keys
 
-        // After receiving the key, process 0 will print the results
+    printf("Process %d: Searching keys from %llx to %llx\n", id, mylower, myupper);
+
+    start_time = MPI_Wtime();
+
+    MPI_Irecv(&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &req);
+
+    for (unsigned long long i = mylower; i <= myupper; ++i) {
+        // Periodically check if a key has been found
+        MPI_Test(&req, &flag, &st);
+        if (flag) {
+            // Key found by another process, stop searching
+            break;
+        }
+        if (tryKey(i, ciphertext, DES_KEY_SIZE, keyword, &iv, id)) {
+            found = i;
+            printf("Key found by process %d\n", id);
+            // Broadcast the found key to all other processes
+            for (int node = 0; node < N; node++) {
+                MPI_Send(&found, 1, MPI_LONG, node, 0, MPI_COMM_WORLD);
+            }
+            break;
+        }
+    }
+
+    MPI_Test(&req, &flag, &st);
+    if (flag) {
+        printf("Process %d received notification to stop.\n", id);
+    }
+
+
+    MPI_Barrier(comm);
+
+    if (id == 0) {
         end_time = MPI_Wtime();
         double elapsed_time = end_time - start_time;
 
         // Decrypt with the found key and print the result
         DES_cblock des_key;
-        // memcpy(&des_key, &found, sizeof(DES_cblock));
         long_to_des_key(found, &des_key);
 
         uint8_t decrypted[DES_KEY_SIZE];
         decrypt_with_key(ciphertext, decrypted, &des_key, &iv);
 
-        printf("Found ");
-        print_key(des_key, DES_KEY_SIZE);
-        printf("Decrypted: %s\n", decrypted);
+        printf("Key found: %li\nDecrypted: %s\n", found, decrypted);
         printf("Time taken to find the key: %f seconds\n", elapsed_time);
-    } else {
-        // Only worker processes (1 to N-1) will search the key space
-        unsigned long long range_per_node = upper / (N - 1);  // Divide the key space by N-1 workers
-        mylower = range_per_node * (id - 1);  // Start range for this worker process
-        myupper = (id == N - 1) ? upper : range_per_node * id - 1;  // Last process gets the remaining keys
 
-        printf("Process %d: Searching keys from %llx to %llx\n", id, mylower, myupper);
-
-        start_time = MPI_Wtime();
-
-        MPI_Irecv(&found, 1, MPI_LONG, MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &req);
-
-        // Brute-force search for the correct key in the range
-        for (unsigned long long i = mylower; i <= myupper; ++i) {
-            // Periodically check if a key has been found
-            MPI_Test(&req, &flag, &st);
-            if (flag) {
-                // Key found by another process, stop searching
-                break;
-            }
-            if (tryKey(i, ciphertext, DES_KEY_SIZE, keyword, &iv, id)) {
-                found = i;
-                printf("Key found by process %d\n", id);
-                // Broadcast the found key to all other processes
-                for (int node = 0; node < N; node++) {
-                    MPI_Send(&found, 1, MPI_LONG, node, 0, MPI_COMM_WORLD);
-                }
-                break;
-            }
-        }
-
-        // MPI_Test(&req, &flag, &st);
-        // if (flag) {
-        //     printf("Process %d received notification to stop.\n", id);
-        // }
+        
     }
 
     MPI_Finalize();
     return 0;
+
 }

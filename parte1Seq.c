@@ -38,6 +38,14 @@ int decrypt_with_key(const uint8_t *ciphertext, uint8_t *plaintext, const DES_cb
     return 0;
 }
 
+void long_to_des_key(unsigned long long key, DES_cblock *des_key) {
+    // We have to split the key into bytes and copy it into the DES_cblock (8 bytes).
+    for (int i = 0; i < 7; ++i) {
+        (*des_key)[7 - i] = (unsigned char)((key >> (i * 8)) & 0xFF);  // Big-endian byte order
+    }
+    (*des_key)[0] = 0x00;  // Ensure that the highest byte is zero for 56-bit key
+}
+
 // Function to brute-force the DES key
 void brute_force_des(const uint8_t *ciphertext, const uint8_t *correct_plaintext, int key_bits, const DES_cblock *iv) {
     uint8_t key[DES_KEY_SIZE] = {0};
@@ -50,8 +58,8 @@ void brute_force_des(const uint8_t *ciphertext, const uint8_t *correct_plaintext
     
     // Start brute-forcing keys
     for (i = 0; i < max_key; i++) {
-        memset(key, 0, DES_KEY_SIZE);  // Clear key array
-        memcpy(key, &i, key_bits / 8);  // Copy only the relevant part of i to the key buffer
+        DES_cblock des_key;
+        long_to_des_key(i, &des_key);  // Copy only the relevant part of i to the key buffer
 
         DES_cblock iv_copy;
         memcpy(&iv_copy, iv, sizeof(DES_cblock));
@@ -98,8 +106,11 @@ int main() {
         printf("Trying key length %d\n", key_bits);
 
         memset(generated_key, 0, DES_KEY_SIZE); 
-        uint64_t max_key = (1ULL << key_bits) - 1;
-        memcpy(generated_key, &max_key, key_bits / 8);
+        
+        for (int i = 0; i < key_bits/8;++i){
+            generated_key[DES_KEY_SIZE - 1 - i] = 0xff;
+        }
+
         print_key(generated_key, DES_KEY_SIZE); 
 
         // Encrypt the plaintext using the generated key

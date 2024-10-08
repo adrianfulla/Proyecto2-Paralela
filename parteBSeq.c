@@ -39,6 +39,14 @@ int decrypt_with_key(const uint8_t *ciphertext, uint8_t *plaintext, const DES_cb
     return 0;
 }
 
+void long_to_des_key(unsigned long long key, DES_cblock *des_key) {
+    // We have to split the key into bytes and copy it into the DES_cblock (8 bytes).
+    for (int i = 0; i < 7; ++i) {
+        (*des_key)[7 - i] = (unsigned char)((key >> (i * 8)) & 0xFF);  // Big-endian byte order
+    }
+    (*des_key)[0] = 0x00;  // Ensure that the highest byte is zero for 56-bit key
+}
+
 // Function to brute-force the DES key
 void brute_force_des(const uint8_t *ciphertext, const char *keyword, int key_bits, const DES_cblock *iv, size_t length) {
     uint8_t key[DES_KEY_SIZE] = {0};
@@ -51,20 +59,18 @@ void brute_force_des(const uint8_t *ciphertext, const char *keyword, int key_bit
     
     // Start brute-forcing keys
     for (i = 0; i < max_key; i++) {
-        memset(key, 0, DES_KEY_SIZE);  // Clear key array
-        memcpy(key, &i, key_bits / 8);  // Copy only the relevant part of i to the key buffer
-
+       DES_cblock des_key; 
+       long_to_des_key(i, &des_key);  // Copy only the relevant part of i to the key buffer
         DES_cblock iv_copy;
         memcpy(&iv_copy, iv, sizeof(DES_cblock));
 
-        decrypt_with_key(ciphertext, decrypted, (DES_cblock *)key, &iv_copy, length);
-
+        decrypt_with_key(ciphertext, decrypted, des_key, &iv_copy, length);
         // Check if the keyword exists in the decrypted text
         if (strstr(decrypted, keyword) != NULL) {
             clock_gettime(CLOCK_MONOTONIC, &end_time);
             double time_taken = get_time_diff(start_time, end_time);
             printf("Key found: %llx\n", (unsigned long long)i);
-            print_key(key, DES_KEY_SIZE);  // Print the found key
+            print_key(des_key, DES_KEY_SIZE);  // Print the found key
             printf("Decrypted: %s\n", decrypted);  // Print the decrypted text
             printf("Time taken for key size %d bits: %f seconds\n", key_bits, time_taken);
             free(decrypted);
@@ -140,12 +146,13 @@ int main(int argc, char *argv[]) {
     DES_cblock iv = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};  // IV initialization
     uint8_t generated_key[DES_KEY_SIZE];
     
-    for (int key_bits = 8; key_bits <= 56; key_bits += 8) { 
+    for (int key_bits = 8; key_bits <= 9; key_bits += 8) { 
         printf("Trying key length %d\n", key_bits);
 
         memset(generated_key, 0, DES_KEY_SIZE);
-        uint64_t max_key = (1ULL << key_bits) - 1;
-        memcpy(generated_key, &max_key, key_bits / 8);
+        for (int i = 0; i < key_bits/8;++i){
+            generated_key[DES_KEY_SIZE - 1 - i] = 0xff;
+        }
         print_key(generated_key, DES_KEY_SIZE);
 
         // Encrypt the entire plaintext using the generated key
