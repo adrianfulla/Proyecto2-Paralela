@@ -1,4 +1,4 @@
-[# Proyecto 2 - Open MPI
+# Proyecto 2 - Open MPI
 ## Universidad del Valle de Guatemala
 ### CC3069 - Computación paralela y distribuida
 ### Autores
